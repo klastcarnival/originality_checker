@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>프롬프트 유사성 및 독창성 분석기</title>
+    
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 30px;
+            background-color: #f4f7f9;
+            color: #333;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: #ffffff;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+        }
+        h1 {
+            color: #007bff;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        h3 {
+            margin-top: 0;
+            color: #333;
+        }
+        .prompt-input-section {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .prompt-box {
+            flex: 1;
+        }
+        textarea {
+            width: 100%;
+            padding: 15px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            box-sizing: border-box;
+            font-size: 14px;
+            resize: vertical;
+            transition: border-color 0.3s;
+        }
+        textarea:focus {
+            border-color: #007bff;
+            outline: none;
+        }
+        .analyze-button {
+            display: block;
+            width: 100%;
+            padding: 15px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 18px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+            margin-bottom: 10px;
+        }
+        .analyze-button:hover {
+            background-color: #0056b3;
+        }
+        #results {
+            margin-top: 40px;
+            padding: 20px;
+            background-color: #e9f7ff;
+            border-radius: 10px;
+            border: 1px solid #cceeff;
+        }
+        .result-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 0;
+            border-bottom: 1px dashed #cceeff;
+        }
+        .result-item:last-child {
+            border-bottom: none;
+        }
+        .label {
+            font-weight: bold;
+            color: #007bff;
+            font-size: 1.1em;
+        }
+        .score {
+            font-size: 1.8em;
+            font-weight: 900;
+            color: #28a745;
+        }
+        .judgment-box {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 8px;
+            font-size: 1.1em;
+            line-height: 1.6;
+            border: 1px solid transparent;
+        }
+        .judgment-box h3 {
+            border-bottom: 1px solid rgba(0,0,0,0.1);
+            padding-bottom: 5px;
+        }
+        /* 판단 결과 색상 조정 */
+        .judgment-box.low { background-color: #c8e6c9; color: #388e3c; border-color: #a5d6a7; } /* 독창적일 때 연한 녹색 */
+        .judgment-box.neutral { background-color: #e3f2fd; color: #1e88e5; border-color: #bbdefb; } /* 기준 초과 시 연한 파란색 */
+        .judgment-box.high { background-color: #ffe0b2; color: #f57c00; border-color: #ffcc80; } /* 긴 문구 차용 의심 시 주황색 */
+        
+        .overlap-text {
+            background-color: #ffeb3b;
+            padding: 5px;
+            border-radius: 4px;
+            font-style: italic;
+            font-weight: bold;
+            word-break: break-word;
+        }
+        #overlapListContainer {
+            margin-top: 15px;
+            padding: 15px;
+            background-color: #fff;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            max-height: 250px;
+            overflow-y: auto;
+            display: none; /* 초기 숨김 */
+        }
+        #overlapListContainer h4 {
+            margin-top: 0;
+            color: #007bff;
+        }
+        #overlapList {
+            list-style: disc;
+            padding-left: 20px;
+        }
+        #overlapList li {
+            margin-bottom: 5px;
+            font-size: 0.95em;
+        }
+        .action-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        .action-buttons button {
+            flex: 1;
+            padding: 8px;
+            font-size: 0.9em;
+            margin: 0;
+        }
+        .copy-button {
+            background-color: #28a745; /* 녹색 */
+        }
+        .copy-button:hover {
+            background-color: #1e7e34;
+        }
+        .toggle-button {
+            background-color: #6c757d; /* 회색 */
+        }
+        .toggle-button:hover {
+            background-color: #5a6268;
+        }
+    </style>
+
+</head>
+<body>
+
+    <div class="container">
+        <h1>🔍 프롬프트 유사성 및 독창성 분석기</h1>
+        <p>A 프롬프트(검증 대상)와 B 프롬프트(원본/참고 대상)의 유사율(%) 및 겹치는 문구를 분석합니다.</p>
+        
+        <div class="prompt-input-section">
+            <div class="prompt-box">
+                <h3>A 프롬프트 (검증 대상)</h3>
+                <textarea id="promptA" rows="8" placeholder="A 프롬프트를 입력하세요. (영문/숫자 키워드 권장)"></textarea>
+            </div>
+            <div class="prompt-box">
+                <h3>B 프롬프트 (원본/참고 대상)</h3>
+                <textarea id="promptB" rows="8" placeholder="B 프롬프트를 입력하세요. (영문/숫자 키워드 권장)"></textarea>
+            </div>
+        </div>
+    
+        <button class="analyze-button" onclick="analyzePrompts()">분석 실행</button>
+    
+        <div id="results" style="display: none;">
+            <h2>📊 분석 결과</h2>
+            <div class="result-item">
+                <span class="label">A가 B와 유사한 정도 (단어 기반 Jaccard Index):</span>
+                <span id="similarityScore" class="score">0.00%</span>
+            </div>
+            <div class="result-item">
+                <span class="label">구조적 흡사성 (단어 수 기준):</span>
+                <span id="structuralScore" class="score">0.00%</span>
+            </div>
+            
+            <div class="judgment-box neutral">
+                <h3>겹치는 가장 긴 문구 (LCS: Longest Common Substring)</h3>
+                <p id="overlapPhrase">분석을 실행하면 여기에 가장 길게 겹치는 문구가 표시됩니다.</p>
+                
+                <div class="action-buttons">
+                    <button class="toggle-button" onclick="toggleOverlapList()" id="toggleButton">겹치는 상세 목록 보기</button>
+                    <button class="copy-button" onclick="copyOverlapWords()">겹치는 단어 목록 복사</button>
+                </div>
+
+                <div id="overlapListContainer">
+                    <h4>✅ 겹치는 모든 단어</h4>
+                    <ul id="overlapList">
+                        </ul>
+                </div>
+            </div>
+
+            <div class="judgment-box" id="judgmentBox">
+                <h3>⭐ 종합 판단 가이드라인</h3>
+                <p id="judgmentText"></p>
+                <p id="detailsText" style="font-size: 0.9em; margin-top: 10px;"></p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 전역 변수로 겹치는 단어 목록을 저장 (복사 기능에 사용)
+        let g_overlapWords = [];
+
+        /**
+         * Longest Common Substring (LCS) 알고리즘
+         */
+        function findLCS(text1, text2) {
+            const m = text1.length;
+            const n = text2.length;
+            const dp = Array(m + 1).fill(0).map(() => Array(n + 1).fill(0));
+            let maxLength = 0;
+            let endIndex = 0;
+
+            for (let i = 1; i <= m; i++) {
+                for (let j = 1; j <= n; j++) {
+                    if (text1[i - 1].toLowerCase() === text2[j - 1].toLowerCase()) {
+                        dp[i][j] = dp[i - 1][j - 1] + 1;
+                        if (dp[i][j] > maxLength) {
+                            maxLength = dp[i][j];
+                            endIndex = i;
+                        }
+                    } else {
+                        dp[i][j] = 0;
+                    }
+                }
+            }
+            if (maxLength === 0) return "";
+            return text1.substring(endIndex - maxLength, endIndex);
+        }
+
+        /**
+         * 겹치는 목록 표시/숨김 토글
+         */
+        function toggleOverlapList() {
+            const container = document.getElementById('overlapListContainer');
+            const button = document.getElementById('toggleButton');
+            
+            if (container.style.display === 'none') {
+                container.style.display = 'block';
+                button.textContent = '겹치는 상세 목록 숨기기';
+            } else {
+                container.style.display = 'none';
+                button.textContent = '겹치는 상세 목록 보기';
+            }
+        }
+
+        /**
+         * 겹치는 단어 목록 클립보드에 복사
+         */
+        function copyOverlapWords() {
+            if (g_overlapWords.length === 0) {
+                alert("복사할 겹치는 단어가 없습니다.");
+                return;
+            }
+
+            const textToCopy = g_overlapWords.join('\n'); // 단어를 줄바꿈으로 구분하여 복사
+            
+            navigator.clipboard.writeText(textToCopy).then(() => {
+                alert(`겹치는 단어 ${g_overlapWords.length}개를 클립보드에 복사했습니다.`);
+            }).catch(err => {
+                console.error('클립보드 복사 실패:', err);
+                alert('클립보드 복사에 실패했습니다. (브라우저 권한 문제일 수 있습니다.)');
+            });
+        }
+
+        /**
+         * 메인 분석 함수
+         */
+        function analyzePrompts() {
+            const promptA = document.getElementById('promptA').value.trim();
+            const promptB = document.getElementById('promptB').value.trim();
+            const resultsDiv = document.getElementById('results');
+            const listContainer = document.getElementById('overlapListContainer');
+            const toggleButton = document.getElementById('toggleButton');
+
+            if (!promptA || !promptB) {
+                alert("두 프롬프트 모두 입력해 주세요.");
+                resultsDiv.style.display = 'none';
+                return;
+            }
+
+            // 1. 단어 기반 유사율 (Jaccard Index) 계산
+            const getWords = (prompt) => {
+                // 한글은 유효한 단어로 카운트하지 않도록 영문/숫자/밑줄만 매칭 (Jaccard Index 계산 기준)
+                const words = prompt.toLowerCase().match(/\b(\w+)\b/g) || [];
+                return new Set(words);
+            };
+
+            const wordsA = getWords(promptA);
+            const wordsB = getWords(promptB);
+
+            const intersection = new Set([...wordsA].filter(word => wordsB.has(word)));
+            const union = new Set([...wordsA, ...wordsB]);
+
+            const similarityPercentage = (union.size === 0) ? 0 : (intersection.size / union.size) * 100;
+            const similarityRounded = similarityPercentage.toFixed(2);
+
+            // 2. 구조적 흡사성 (Structural Similarity)
+            // 공백을 포함한 모든 문자를 기반으로 단어 수를 카운트
+            const countA = (promptA.match(/\S+/g) || []).length;
+            const countB = (promptB.match(/\S+/g) || []).length;
+            
+            const lengthRatio = (Math.min(countA, countB) / Math.max(countA, countB)) * 100;
+            const structuralScore = lengthRatio.toFixed(2);
+
+            // 3. 겹치는 가장 긴 문구 (LCS) 찾기
+            const longestOverlap = findLCS(promptA, promptB);
+            const overlapRatio = (longestOverlap.length / Math.min(promptA.length, promptB.length)) * 100;
+
+            // 4. 겹치는 단어 목록 생성 및 전역 변수 업데이트
+            const overlapListElement = document.getElementById('overlapList');
+            overlapListElement.innerHTML = '';
+            
+            if (intersection.size > 0) {
+                g_overlapWords = Array.from(intersection).sort();
+                g_overlapWords.forEach(word => {
+                    const li = document.createElement('li');
+                    li.textContent = word;
+                    overlapListElement.appendChild(li);
+                });
+            } else {
+                g_overlapWords = [];
+                const li = document.createElement('li');
+                li.textContent = '공통으로 겹치는 단어가 없습니다.';
+                overlapListElement.appendChild(li);
+            }
+            
+            // 5. 결과 판별 및 메시지 생성 (최종 오류 수정 로직)
+            let judgment = '';
+            let details = '';
+            let boxClass = 'neutral';
+
+            const sim = similarityPercentage;
+            const str = lengthRatio;
+
+            // 1. 긴 문구 차용 (LCS)이 40%를 초과하는지 최우선 검사 (40% 기준 적용)
+            if (overlapRatio >= 40 && longestOverlap.trim().length > 5) {
+                judgment = '⚠️ 긴 문구의 직접적인 차용 의심';
+                details = `A 프롬프트에 B 프롬프트의 '긴 문구(${longestOverlap.trim().length}자)'가 '직접적으로 포함'되어 있습니다. 수치와 관계없이 '복사/붙여넣기'가 의심되므로 출처 표기 또는 독자적인 재구성이 필요합니다.`;
+                boxClass = 'high'; 
+            
+            } else if (sim < 40 && str < 40) {
+                // 2. LCS 문제가 없고, 40% 미만일 때만 '독창적'으로 판단
+                judgment = '✅ 독창적 프롬프트로 판단.';
+                details = `A는 B와 단어 유사율(40% 미만)과 구조적 흡사성(40% 미만) 모두 낮습니다. 독창적인 구성입니다.`;
+                boxClass = 'low';
+
+            } else {
+                // 3. 40% 이상이지만 LCS 문제가 없는 경우 (수치 검토 필요)
+                // (긴 문구 차용에 대한 단정적 판단 문구는 제거하고 수치 검토를 유도)
+                judgment = '⚖️ 독창성 기준 초과.';
+                details = `단어 기반 유사율 및 구조적 흡사성 중 하나 이상이 독창성 기준(40%)을 초과했습니다. 표시된 수치(${similarityRounded}%, ${structuralScore}%)와 겹치는 문구를 바탕으로 공유 가능 여부를 최종 판단해야 합니다.`;
+                boxClass = 'neutral';
+            }
+            
+            // 6. 최종 결과 출력
+            document.getElementById('similarityScore').textContent = `${similarityRounded}%`;
+            document.getElementById('structuralScore').textContent = `${structuralScore}%`;
+            
+            const overlapText = longestOverlap.trim();
+            const overlapDisplay = (overlapText.length > 0) 
+                                ? `<span class="overlap-text">"${overlapText}"</span> (문자 길이: ${overlapText.length}자)`
+                                : '겹치는 문구가 발견되지 않았습니다.';
+            document.getElementById('overlapPhrase').innerHTML = overlapDisplay;
+
+            document.getElementById('judgmentBox').className = `judgment-box ${boxClass}`;
+            document.getElementById('judgmentText').innerHTML = judgment;
+            document.getElementById('detailsText').innerHTML = details;
+            
+            // 결과 컨테이너 표시 및 목록 숨김 초기화
+            resultsDiv.style.display = 'block';
+            listContainer.style.display = 'none';
+            toggleButton.textContent = '겹치는 상세 목록 보기';
+        }
+    </script>
+
+</body>
+</html>
